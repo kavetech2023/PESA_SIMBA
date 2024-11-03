@@ -1,26 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Elements } from '@stripe/react-stripe-js';
-import { loadStripe } from '@stripe/stripe-js';
 import { auth, db } from './firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
-import { collection, doc, setDoc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
-import { Trophy, LogIn, LogOut } from 'lucide-react';
+import { collection, doc, setDoc, getDoc, updateDoc, onSnapshot, addDoc } from 'firebase/firestore';
+import { Trophy, LogIn, LogOut, Coins } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { BettingCard } from './components/BettingCard';
 import { PaymentModal } from './components/PaymentModal';
-
-const stripePromise = loadStripe('your_stripe_publishable_key');
+import { PrizeBanner } from './components/PrizeBanner';
+import { CharityBanner } from './components/CharityBanner';
+import kamala from "./assets/kamala.webp"
+import trump from "./assets/trump.webp"
 
 const candidates = [
   {
     name: "Donald Trump",
     party: "Republican",
-    image: "https://images.unsplash.com/photo-1580128660010-fd027e1e587a?auto=format&fit=crop&q=80&w=300&h=300"
+    image: trump
   },
   {
-    name: "Joe Biden",
+    name: "Kamala Harris",
     party: "Democrat",
-    image: "https://images.unsplash.com/photo-1612831197310-ff5cf7a547b6?auto=format&fit=crop&q=80&w=300&h=300"
+    image: kamala
   }
 ];
 
@@ -28,14 +28,16 @@ function App() {
   const [user, setUser] = useState(null);
   const [votes, setVotes] = useState({});
   const [userBet, setUserBet] = useState(null);
+  const [userBalance, setUserBalance] = useState(0);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [selectedBet, setSelectedBet] = useState(null);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setUser(user);
       if (user) {
         getUserBet(user.uid);
+        getUserBalance(user.uid);
       }
     });
 
@@ -53,10 +55,23 @@ function App() {
     };
   }, []);
 
+  const getUserBalance = async (userId) => {
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    if (userDoc.exists()) {
+      setUserBalance(userDoc.data().balance || 0);
+    }
+  };
+
   const login = async () => {
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      await setDoc(doc(db, 'users', result.user.uid), {
+        email: result.user.email,
+        name: result.user.displayName,
+        balance: 1000, // Starting balance
+        createdAt: new Date()
+      }, { merge: true });
       toast.success('Welcome to Presidential Betting!');
     } catch (error) {
       toast.error('Login failed. Please try again.');
@@ -67,6 +82,7 @@ function App() {
     try {
       await signOut(auth);
       setUserBet(null);
+      setUserBalance(0);
       toast.success('Logged out successfully');
     } catch (error) {
       toast.error('Logout failed');
@@ -80,31 +96,31 @@ function App() {
     }
   };
 
-  const handleBetSubmit = async (amount) => {
-    if (!user || !selectedCandidate) {
+  const handleBetSubmit = async (amount, marginPrediction) => {
+    if (!user || !selectedBet) {
       toast.error('Please login to place a bet');
       return;
     }
 
     try {
-      // Create payment record
-      await setDoc(doc(db, 'payments', `${user.uid}-${Date.now()}`), {
+      // Record the bet in Firestore
+      await addDoc(collection(db, 'bets'), {
         userId: user.uid,
-        candidate: selectedCandidate.name,
+        userName: user.displayName,
+        candidate: selectedBet.candidate.name,
         amount,
-        status: 'pending',
-        timestamp: new Date()
+        marginPrediction,
+        timestamp: new Date(),
+        status: 'active'
       });
 
-      // Update user's bet
-      await setDoc(doc(db, 'userBets', user.uid), {
-        candidate: selectedCandidate.name,
-        amount,
-        timestamp: new Date()
+      // Update user's balance
+      await updateDoc(doc(db, 'users', user.uid), {
+        balance: userBalance - amount
       });
 
       // Update vote count
-      const voteRef = doc(db, 'votes', selectedCandidate.name);
+      const voteRef = doc(db, 'votes', selectedBet.candidate.name);
       const voteDoc = await getDoc(voteRef);
       
       if (voteDoc.exists()) {
@@ -115,8 +131,10 @@ function App() {
         await setDoc(voteRef, { count: 1 });
       }
 
-      setUserBet(selectedCandidate.name);
-      toast.success(`Successfully placed $${amount} bet on ${selectedCandidate.name}!`);
+      setUserBet(selectedBet.candidate.name);
+      setUserBalance(prev => prev - amount);
+      setSelectedBet(null);
+      toast.success('Bet placed successfully!');
     } catch (error) {
       toast.error('Failed to place bet');
     }
@@ -129,72 +147,89 @@ function App() {
     return total ? ((votes / total) * 100).toFixed(1) : '0';
   };
 
-  const handleOpenBetting = (candidate) => {
-    if (!user) {
-      toast.error('Please login to place a bet');
-      return;
-    }
-    if (userBet) {
-      toast.error('You have already placed a bet!');
-      return;
-    }
-    setSelectedCandidate(candidate);
-    setIsPaymentModalOpen(true);
-  };
-
   return (
-    <Elements stripe={stripePromise}>
-      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-red-900 text-white">
-        <Toaster position="top-center" />
+    <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500">
+      <Toaster position="top-center" />
+      
+      <header className="bg-white/10 backdrop-blur-lg shadow-lg">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <Trophy className="w-8 h-8 text-yellow-400" />
+              <h1 className="text-2xl font-bold text-white">BetPredictions</h1>
+            </div>
+            
+            <div className="flex items-center gap-6">
+              {user && (
+                <div className="flex items-center gap-2 bg-white/20 px-4 py-2 rounded-full">
+                  <Coins className="w-5 h-5 text-yellow-400" />
+                  <span className="text-white font-semibold">${userBalance.toLocaleString()}</span>
+                </div>
+              )}
+              
+              {user ? (
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-6 py-2 rounded-full transition-colors text-white font-semibold"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Logout
+                </button>
+              ) : (
+                <button
+                  onClick={login}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-full transition-colors text-white font-semibold"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Login with Google
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8">
+        <CharityBanner />
         
-        <header className="p-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Trophy className="w-8 h-8 text-yellow-400" />
-            <h1 className="text-2xl font-bold">Presidential Betting 2024</h1>
-          </div>
+        
+        <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+          {candidates.map((candidate) => (
+            <BettingCard
+              key={candidate.name}
+              candidate={candidate}
+              votes={votes}
+              userBet={userBet}
+              getPercentage={getPercentage}
+              onOpenBetting={(candidate, amount, potentialWin, margin) => {
+                setSelectedBet({ candidate, amount, potentialWin, margin });
+                setIsPaymentModalOpen(true);
+              }}
+              // Customization for bigger images and green tick on hover
+              imageStyle={{ width: '100%', height: 'auto' }}
+            />
+          ))}
           
-          {user ? (
-            <button
-              onClick={logout}
-              className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-4 py-2 rounded-full transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              Logout
-            </button>
-          ) : (
-            <button
-              onClick={login}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-full transition-colors"
-            >
-              <LogIn className="w-4 h-4" />
-              Login with Google
-            </button>
-          )}
-        </header>
+        </div>
+        
+      </main>
 
-        <main className="container mx-auto px-4 py-8">
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {candidates.map((candidate) => (
-              <BettingCard
-                key={candidate.name}
-                candidate={candidate}
-                votes={votes}
-                userBet={userBet}
-                getPercentage={getPercentage}
-                onOpenBetting={handleOpenBetting}
-              />
-            ))}
-          </div>
-        </main>
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedBet(null);
+        }}
+        onSubmit={handleBetSubmit}
+        candidate={selectedBet?.candidate}
+        stakeAmount={selectedBet?.amount}
+        possibleWin={selectedBet?.potentialWin}
+        marginPrediction={selectedBet?.margin}
+        userBalance={userBalance}
+      />
 
-        <PaymentModal
-          isOpen={isPaymentModalOpen}
-          onClose={() => setIsPaymentModalOpen(false)}
-          onSubmit={handleBetSubmit}
-          candidate={selectedCandidate}
-        />
-      </div>
-    </Elements>
+
+    </div>
   );
 }
 

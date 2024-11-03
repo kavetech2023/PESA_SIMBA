@@ -1,44 +1,42 @@
-import React, { useState } from 'react';
-import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { DollarSign, CreditCard, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { CreditCard, X } from 'lucide-react';
+import 'intasend-inlinejs-sdk'
 import toast from 'react-hot-toast';
-import { formatUSD } from '../utils/currency';
 
-export function PaymentModal({ isOpen, onClose, onSubmit, candidate }) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [amount, setAmount] = useState(10);
+export function PaymentModal({ isOpen, onClose, onSubmit, candidate, stakeAmount, possibleWin }) {
   const [isProcessing, setIsProcessing] = useState(false);
 
-  if (!isOpen || !candidate) return null;
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-
-    setIsProcessing(true);
-    try {
-      const { error } = await stripe.createPaymentMethod({
-        type: 'card',
-        card: elements.getElement(CardElement),
-        billing_details: {
-          email: 'user@example.com', // In production, get from user profile
-        },
+  useEffect(() => {
+    if (isOpen) {
+      const intaSend = new window.IntaSend({
+        publicAPIKey: "ISPubKey_live_49bb188a-4022-4d59-b35b-af970f226d6a",
+        live: true
       });
 
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      await onSubmit(amount);
-      onClose();
-    } catch (error) {
-      console.error('Payment failed:', error);
-      toast.error(error.message || 'Payment failed');
-    } finally {
-      setIsProcessing(false);
+      intaSend
+        .on("COMPLETE", async (response) => {
+          console.log("COMPLETE:", response);
+          try {
+            await onSubmit(stakeAmount);
+            toast.success('Payment successful!');
+            onClose();
+          } catch (error) {
+            toast.error('Failed to record bet');
+          }
+        })
+        .on("FAILED", (response) => {
+          console.log("FAILED", response);
+          toast.error('Payment failed');
+          setIsProcessing(false);
+        })
+        .on("IN-PROGRESS", () => {
+          console.log("INPROGRESS ...");
+          setIsProcessing(true);
+        });
     }
-  };
+  }, [isOpen, stakeAmount, onClose, onSubmit]);
+
+  if (!isOpen || !candidate) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -51,7 +49,7 @@ export function PaymentModal({ isOpen, onClose, onSubmit, candidate }) {
         </button>
 
         <h2 className="text-2xl font-bold mb-4 text-gray-800">
-          Place Bet on {candidate.name}
+          Confirm Your Bet
         </h2>
 
         <div className="flex items-center justify-center mb-6">
@@ -60,60 +58,41 @@ export function PaymentModal({ isOpen, onClose, onSubmit, candidate }) {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Bet Amount
-            </label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="number"
-                min="10"
-                max="1000"
-                value={amount}
-                onChange={(e) => setAmount(Number(e.target.value))}
-                className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Card Details
-            </label>
-            <div className="p-3 border border-gray-300 rounded-lg">
-              <CardElement
-                options={{
-                  style: {
-                    base: {
-                      fontSize: '16px',
-                      color: '#424770',
-                      '::placeholder': {
-                        color: '#aab7c4',
-                      },
-                    },
-                    invalid: {
-                      color: '#9e2146',
-                    },
-                  },
-                }}
-              />
+        <div className="space-y-6">
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-600">Candidate</p>
+                <p className="font-semibold">{candidate.name}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Party</p>
+                <p className="font-semibold">{candidate.party}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Stake Amount</p>
+                <p className="font-semibold">${stakeAmount}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Possible Win</p>
+                <p className="font-semibold text-green-600">${possibleWin}</p>
+              </div>
             </div>
           </div>
 
           <button
-            type="submit"
             disabled={isProcessing}
-            className={`w-full py-3 rounded-lg font-bold text-white transition-colors ${
+            className={`intaSendPayButton w-full py-3 rounded-lg font-bold text-white transition-colors ${
               isProcessing
                 ? "bg-gray-400 cursor-not-allowed"
                 : "bg-blue-600 hover:bg-blue-700"
             }`}
+            data-amount={stakeAmount}
+            data-currency="USD"
           >
-            {isProcessing ? "Processing..." : formatUSD(amount)}
+            {isProcessing ? "Processing..." : `Confirm and Pay $${stakeAmount}`}
           </button>
-        </form>
+        </div>
       </div>
     </div>
   );
