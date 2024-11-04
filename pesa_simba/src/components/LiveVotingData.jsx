@@ -3,7 +3,7 @@ import { TrendingUp, TrendingDown, Globe } from 'lucide-react';
 
 const MOCK_COUNTRIES = [
   'United States', 'Canada', 'United Kingdom', 'Germany', 'France', 
-  'Japan', 'Australia', 'Brazil', 'India', 'South Africa'
+  'Japan', 'Australia', 'Brazil', 'India', 'South Africa','China'
 ];
 
 export function LiveVotingData({ candidate }) {
@@ -30,7 +30,7 @@ export function LiveVotingData({ candidate }) {
     <div className="bg-gray-50 rounded-lg p-4 mb-6">
       <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
         <Globe className="w-5 h-5" />
-        Live Voting Activity
+        Live Bets 
       </h3>
       
       <div className="space-y-2">

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { TrendingUp, DollarSign } from 'lucide-react';
 import { LiveVotingData } from './LiveVotingData';
 
-const PRESET_AMOUNTS = [1, 5, 10, 50, 100, 500];
+const PRESET_AMOUNTS = [1, 5, 10, 50, 100, 500, 1000];
 
 export function BettingCard({ candidate, votes, userBet, getPercentage, onOpenBetting }) {
   const [stakeAmount, setStakeAmount] = useState(10);
@@ -10,7 +10,7 @@ export function BettingCard({ candidate, votes, userBet, getPercentage, onOpenBe
 
   const calculatePotentialWin = () => {
     // Assuming a fixed prize for simplicity
-    return stakeAmount * 2; // Example: Double the stake amount as the potential win
+    return stakeAmount * 1.5; // Example: Double the stake amount as the potential win
   };
 
   const handleBetClick = () => {
@@ -43,7 +43,7 @@ export function BettingCard({ candidate, votes, userBet, getPercentage, onOpenBe
       <h2 className="text-2xl font-bold text-center mb-2 text-gray-800">{candidate.name}</h2>
       <p className="text-center text-lg mb-4 text-gray-600">{candidate.party}</p>
       
-      <LiveVotingData candidate={candidate} />
+      
       
       <div className="relative h-4 bg-gray-100 rounded-full mb-4">
         <div
@@ -51,18 +51,12 @@ export function BettingCard({ candidate, votes, userBet, getPercentage, onOpenBe
             candidate.party === "Republican" ? "bg-red-500" : "bg-blue-500"
           }`}
           style={{
-            width: `${getPercentage(votes[candidate.name] || 50)}%`
+            width: `${getPercentage(votes[candidate.name] || 0)}%`
           }}
         />
       </div>
       
-      <div className="flex justify-between items-center mb-6">
-        <span className="flex items-center gap-1 text-gray-600">
-          <TrendingUp className="w-4 h-4" />
-          {votes[candidate.name] || 10000} votes
-        </span>
-        <span className="text-lg font-semibold text-gray-800">{getPercentage(50)}%</span>
-      </div>
+      
 
       {!userBet && (
         <div className="space-y-4">
@@ -94,12 +88,13 @@ export function BettingCard({ candidate, votes, userBet, getPercentage, onOpenBe
           >
             Place ${stakeAmount} Bet
           </button>
-
           <div className="text-center">
             <div className="text-xl font-bold text-green-600">
               Potential Win: ${calculatePotentialWin().toFixed(2)}
             </div>
           </div>
+          <LiveVotingData candidate={candidate} />
+          
         </div>
       )}
 
@@ -108,6 +103,14 @@ export function BettingCard({ candidate, votes, userBet, getPercentage, onOpenBe
           Current Bet Placed!
         </div>
       )}
+
+<div className="flex justify-between items-center mb-6">
+        <span className="flex items-center gap-1 text-gray-600">
+          <TrendingUp className="w-4 h-4" />
+          {votes[candidate.name] || 10000} votes
+        </span>
+        <span className="text-lg font-semibold text-gray-800">{getPercentage(50)}%</span>
+      </div>
     </div>
   );
 }

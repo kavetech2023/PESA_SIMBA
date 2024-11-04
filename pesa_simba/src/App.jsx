@@ -8,6 +8,8 @@ import { BettingCard } from './components/BettingCard';
 import { PaymentModal } from './components/PaymentModal';
 import { PrizeBanner } from './components/PrizeBanner';
 import { CharityBanner } from './components/CharityBanner';
+import {About} from './components/About'
+import { Share } from './components/Share'; // Import Share component
 import kamala from "./assets/kamala.webp"
 import trump from "./assets/trump.webp"
 
@@ -69,8 +71,8 @@ function App() {
       await setDoc(doc(db, 'users', result.user.uid), {
         email: result.user.email,
         name: result.user.displayName,
-        balance: 1000, // Starting balance
-        createdAt: new Date()
+        balance: 1000,
+        createdAt: serverTimestamp()
       }, { merge: true });
       toast.success('Welcome to Presidential Betting!');
     } catch (error) {
@@ -90,10 +92,25 @@ function App() {
   };
 
   const getUserBet = async (userId) => {
-    const userDoc = await getDoc(doc(db, 'userBets', userId));
-    if (userDoc.exists()) {
-      setUserBet(userDoc.data().candidate);
-    }
+    const userBetsRef = collection(db, 'bets');
+    const unsubscribe = onSnapshot(
+      userBetsRef,
+      (snapshot) => {
+        const userBets = snapshot.docs
+          .filter(doc => doc.data().userId === userId)
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }))
+          .sort((a, b) => b.timestamp - a.timestamp);
+
+        if (userBets.length > 0) {
+          setUserBet(userBets[0].candidate);
+        }
+      }
+    );
+
+    return unsubscribe;
   };
 
   const handleBetSubmit = async (amount, marginPrediction) => {
@@ -103,20 +120,25 @@ function App() {
     }
 
     try {
-      // Record the bet in Firestore
-      await addDoc(collection(db, 'bets'), {
+      // Save bet in Firestore
+      const betRef = await addDoc(collection(db, 'bets'), {
         userId: user.uid,
         userName: user.displayName,
+        userEmail: user.email,
         candidate: selectedBet.candidate.name,
-        amount,
+        amount: amount,
         marginPrediction,
-        timestamp: new Date(),
-        status: 'active'
+        timestamp: serverTimestamp(),
+        status: 'active',
+        party: selectedBet.candidate.party,
+        potentialWin: selectedBet.potentialWin
       });
 
-      // Update user's balance
-      await updateDoc(doc(db, 'users', user.uid), {
-        balance: userBalance - amount
+       // Update user's balance
+       await updateDoc(doc(db, 'users', user.uid), {
+        balance: userBalance - amount,
+        lastBetId: betRef.id,
+        lastBetTimestamp: serverTimestamp()
       });
 
       // Update vote count
@@ -192,7 +214,6 @@ function App() {
       <main className="container mx-auto px-4 py-8">
         <CharityBanner />
         
-        
         <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
           {candidates.map((candidate) => (
             <BettingCard
@@ -211,7 +232,9 @@ function App() {
           ))}
           
         </div>
+        <About/>
         
+        <Share /> 
       </main>
 
       <PaymentModal
